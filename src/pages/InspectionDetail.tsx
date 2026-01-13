@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, CheckCircle, AlertTriangle, XCircle, 
-  ChevronLeft, ChevronRight, MessageSquare, Clock
+  ChevronLeft, ChevronRight, MessageSquare, Clock, Loader2
 } from 'lucide-react';
-import { mockInspections, type Damage } from '../data/mockData';
+import { 
+  getInspectionById, getDamagesByInspection, getPhotosByInspection,
+  updateInspectionStatus, updateDamageApproval,
+  type Inspection, type Damage, type Photo
+} from '../lib/supabase';
 import { downloadPDF } from '../utils/pdfGenerator';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -48,18 +52,160 @@ const DamageItem = ({ damage, onApprove, onReject }: { damage: Damage; onApprove
 export default function InspectionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const inspection = mockInspections.find(i => i.id === id);
+  
+  const [inspection, setInspection] = useState<Inspection | null>(null);
+  const [damages, setDamages] = useState<Damage[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'damages' | 'consistency'>('damages');
   const [selectedPhoto, setSelectedPhoto] = useState(0);
-  const [reviewNotes, setReviewNotes] = useState(inspection?.reviewNotes || '');
-  const [damages, setDamages] = useState<Damage[]>(inspection?.damages || []);
+  const [reviewNotes, setReviewNotes] = useState('');
   
-  if (!inspection) {
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    if (!id) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const [inspectionData, damagesData, photosData] = await Promise.all([
+        getInspectionById(id),
+        getDamagesByInspection(id),
+        getPhotosByInspection(id)
+      ]);
+      
+      setInspection(inspectionData);
+      setDamages(damagesData);
+      setPhotos(photosData);
+      setReviewNotes(inspectionData.review_notes || '');
+    } catch (err) {
+      console.error('Error loading inspection:', err);
+      setError('Error al cargar la inspección');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleApprove = async () => {
+    if (!inspection) return;
+    setSaving(true);
+    try {
+      await updateInspectionStatus(inspection.id, 'Aprobada', reviewNotes);
+      alert('✅ Inspección aprobada');
+      navigate('/');
+    } catch (err) {
+      alert('Error al aprobar');
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  const handleReinspection = async () => {
+    if (!inspection) return;
+    setSaving(true);
+    try {
+      await updateInspectionStatus(inspection.id, 'Reinspección', reviewNotes);
+      alert('⚠️ Reinspección solicitada');
+      navigate('/');
+    } catch (err) {
+      alert('Error al solicitar reinspección');
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  const handleEscalate = async () => {
+    if (!inspection) return;
+    setSaving(true);
+    try {
+      await updateInspectionStatus(inspection.id, 'En Revisión', reviewNotes + '\n[ESCALADO A SUPERVISOR]');
+      alert('📤 Escalado a supervisor');
+      navigate('/');
+    } catch (err) {
+      alert('Error al escalar');
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  const toggleDamageApproval = async (damageId: string, approved: boolean) => {
+    try {
+      await updateDamageApproval(damageId, approved);
+      setDamages(prev => prev.map(d => 
+        d.id === damageId ? { ...d, approved } : d
+      ));
+    } catch (err) {
+      console.error('Error updating damage:', err);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!inspection) return;
+    // Adaptar inspection al formato esperado por el generador de PDF
+    const pdfData = {
+      id: inspection.id,
+      clientName: inspection.client_name || '',
+      clientId: inspection.client_id || '',
+      clientPhone: inspection.client_phone || '',
+      clientEmail: inspection.client_email || '',
+      vehicle: {
+        vin: inspection.vehicle_vin || '',
+        plate: inspection.vehicle_plate || '',
+        brand: inspection.vehicle_brand || '',
+        model: inspection.vehicle_model || '',
+        year: inspection.vehicle_year || 0,
+        color: inspection.vehicle_color || '',
+        mileage: inspection.vehicle_mileage || 0,
+        usage: inspection.vehicle_usage || '',
+      },
+      policyType: inspection.policy_type,
+      policyStatus: inspection.policy_status,
+      status: inspection.status,
+      riskScore: inspection.risk_score,
+      qualityScore: inspection.quality_score,
+      slaDeadline: inspection.sla_deadline || '',
+      createdAt: inspection.created_at,
+      tags: inspection.tags || [],
+      damages: damages.map(d => ({
+        id: d.id,
+        part: d.part,
+        type: d.type,
+        severity: d.severity as 'Leve' | 'Moderado' | 'Severo',
+        confidence: d.confidence,
+        approved: d.approved || undefined,
+      })),
+      photos: photos.map(p => p.image_url || ''),
+      clientComments: inspection.client_comments || '',
+      reviewNotes: inspection.review_notes || '',
+    };
+    downloadPDF(pdfData);
+  };
+
+  // Loading
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a12] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-xl text-gray-400">Inspección no encontrada</p>
+          <Loader2 className="w-12 h-12 text-[#ec4899] mx-auto mb-4 animate-spin" />
+          <p className="text-gray-400">Cargando inspección...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error or not found
+  if (error || !inspection) {
+    return (
+      <div className="min-h-screen bg-[#0a0a12] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-xl text-gray-400">{error || 'Inspección no encontrada'}</p>
           <button onClick={() => navigate('/')} className="btn-primary mt-4">
             <ArrowLeft className="w-4 h-4" /> Volver
           </button>
@@ -68,40 +214,26 @@ export default function InspectionDetail() {
     );
   }
   
-  const slaTime = formatDistanceToNow(new Date(inspection.slaDeadline), { locale: es, addSuffix: false });
-  
-  const handleApprove = () => {
-    alert('Inspección aprobada');
-    navigate('/');
-  };
-  
-  const handleReinspection = () => {
-    alert('Reinspección solicitada');
-    navigate('/');
-  };
-  
-  const handleEscalate = () => {
-    alert('Escalado a supervisor');
-  };
-  
-  const toggleDamageApproval = (damageId: string, approved: boolean) => {
-    setDamages(prev => prev.map(d => 
-      d.id === damageId ? { ...d, approved } : d
-    ));
-  };
+  const slaTime = inspection.sla_deadline 
+    ? formatDistanceToNow(new Date(inspection.sla_deadline), { locale: es, addSuffix: false })
+    : 'N/A';
+
+  const vehiclePhotos = photos.filter(p => p.photo_type === 'vehicle');
 
   return (
     <div className="min-h-screen bg-[#0a0a12]">
       {/* Header */}
       <header className="border-b border-white/10 px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
               <ArrowLeft className="w-5 h-5" /> Volver
             </button>
             <div>
               <p className="font-semibold">{inspection.id}</p>
-              <p className="text-sm text-gray-400">{inspection.clientName} • {inspection.vehicle.brand} {inspection.vehicle.model} {inspection.vehicle.year}</p>
+              <p className="text-sm text-gray-400">
+                {inspection.client_name} • {inspection.vehicle_brand} {inspection.vehicle_model} {inspection.vehicle_year}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -111,35 +243,35 @@ export default function InspectionDetail() {
               <span className="text-gray-400">SLA:</span>
               <span className="font-semibold">{slaTime}</span>
             </div>
-            <button onClick={() => downloadPDF(inspection)} className="btn-secondary">
+            <button onClick={handleDownloadPDF} className="btn-secondary">
               <Download className="w-4 h-4" /> PDF
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className="flex flex-col lg:flex-row h-[calc(100vh-73px)]">
         {/* Left Panel - Client & Vehicle Info */}
-        <div className="w-[320px] border-r border-white/10 p-6 overflow-y-auto">
+        <div className="w-full lg:w-[320px] border-b lg:border-b-0 lg:border-r border-white/10 p-6 overflow-y-auto">
           {/* Client Info */}
           <div className="card mb-4">
             <h3 className="font-semibold mb-4 text-sm text-gray-400">Información del Cliente</h3>
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-xs text-gray-500">Nombre</p>
-                <p className="font-medium">{inspection.clientName}</p>
+                <p className="font-medium">{inspection.client_name || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">ID</p>
-                <p className="font-medium">{inspection.clientId}</p>
+                <p className="font-medium">{inspection.client_id || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Teléfono</p>
-                <p className="font-medium">{inspection.clientPhone}</p>
+                <p className="font-medium">{inspection.client_phone || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Email</p>
-                <p className="font-medium">{inspection.clientEmail}</p>
+                <p className="font-medium">{inspection.client_email || 'N/A'}</p>
               </div>
             </div>
           </div>
@@ -150,31 +282,27 @@ export default function InspectionDetail() {
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-xs text-gray-500">VIN</p>
-                <p className="font-mono">{inspection.vehicle.vin}</p>
+                <p className="font-mono text-xs">{inspection.vehicle_vin || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Placa</p>
-                <p className="font-semibold">{inspection.vehicle.plate}</p>
+                <p className="font-semibold">{inspection.vehicle_plate || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Marca/Modelo</p>
-                <p>{inspection.vehicle.brand} {inspection.vehicle.model}</p>
+                <p>{inspection.vehicle_brand} {inspection.vehicle_model}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Año</p>
-                <p>{inspection.vehicle.year}</p>
+                <p>{inspection.vehicle_year || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Color</p>
-                <p>{inspection.vehicle.color}</p>
+                <p>{inspection.vehicle_color || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Kilometraje</p>
-                <p>{inspection.vehicle.mileage.toLocaleString()} km</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Uso</p>
-                <p>{inspection.vehicle.usage}</p>
+                <p>{inspection.vehicle_mileage?.toLocaleString() || 'N/A'} km</p>
               </div>
             </div>
           </div>
@@ -186,16 +314,16 @@ export default function InspectionDetail() {
               <div>
                 <div className="flex justify-between mb-1">
                   <span className="text-sm">Risk</span>
-                  <span className={`font-semibold ${inspection.riskScore >= 70 ? 'text-red-400' : inspection.riskScore >= 50 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {inspection.riskScore}/100
+                  <span className={`font-semibold ${inspection.risk_score >= 70 ? 'text-red-400' : inspection.risk_score >= 50 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {inspection.risk_score}/100
                   </span>
                 </div>
                 <div className="progress-bar">
                   <div 
                     className="progress-fill" 
                     style={{ 
-                      width: `${inspection.riskScore}%`, 
-                      backgroundColor: inspection.riskScore >= 70 ? '#ef4444' : inspection.riskScore >= 50 ? '#f59e0b' : '#10b981' 
+                      width: `${inspection.risk_score}%`, 
+                      backgroundColor: inspection.risk_score >= 70 ? '#ef4444' : inspection.risk_score >= 50 ? '#f59e0b' : '#10b981' 
                     }}
                   />
                 </div>
@@ -203,12 +331,12 @@ export default function InspectionDetail() {
               <div>
                 <div className="flex justify-between mb-1">
                   <span className="text-sm">Quality</span>
-                  <span className="font-semibold text-green-400">{inspection.qualityScore}/100</span>
+                  <span className="font-semibold text-green-400">{inspection.quality_score}/100</span>
                 </div>
                 <div className="progress-bar">
                   <div 
                     className="progress-fill" 
-                    style={{ width: `${inspection.qualityScore}%`, backgroundColor: '#10b981' }}
+                    style={{ width: `${inspection.quality_score}%`, backgroundColor: '#10b981' }}
                   />
                 </div>
               </div>
@@ -221,65 +349,85 @@ export default function InspectionDetail() {
           <div className="card mb-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Visor de Imágenes</h3>
-              <span className="text-sm text-gray-400">{selectedPhoto + 1}/12</span>
+              <span className="text-sm text-gray-400">{photos.length > 0 ? `${selectedPhoto + 1}/${photos.length}` : '0 fotos'}</span>
             </div>
             
             {/* Main Photo */}
-            <div className="aspect-video bg-[#0a0a12] rounded-lg mb-4 flex items-center justify-center border border-white/10">
-              <p className="text-gray-500">Foto {selectedPhoto + 1} - {['Frontal', 'Frontal 45° Izq.', 'Lateral Izq.', 'Trasera 45° Izq.', 'Trasera', 'Trasera 45° Der.', 'Lateral Der.', 'Frontal 45° Der.', 'Dashboard', 'Interior Frontal', 'Interior Trasero', 'Maletero'][selectedPhoto]}</p>
+            <div className="aspect-video bg-[#0a0a12] rounded-lg mb-4 flex items-center justify-center border border-white/10 overflow-hidden">
+              {photos.length > 0 && photos[selectedPhoto]?.image_url ? (
+                <img 
+                  src={photos[selectedPhoto].image_url} 
+                  alt={photos[selectedPhoto].label || 'Foto'}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <p className="text-gray-500">
+                  {photos.length === 0 ? 'No hay fotos' : `Foto ${selectedPhoto + 1}`}
+                </p>
+              )}
             </div>
             
             {/* Photo Grid */}
-            <div className="photo-grid">
-              {Array(12).fill(null).map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`photo-cell ${selectedPhoto === i ? 'active' : ''}`}
-                  onClick={() => setSelectedPhoto(i)}
-                >
-                  <span className="text-xs text-gray-500">{i + 1}</span>
+            {photos.length > 0 && (
+              <>
+                <div className="photo-grid">
+                  {photos.slice(0, 12).map((photo, i) => (
+                    <div 
+                      key={photo.id} 
+                      className={`photo-cell ${selectedPhoto === i ? 'active' : ''}`}
+                      onClick={() => setSelectedPhoto(i)}
+                    >
+                      {photo.image_url ? (
+                        <img src={photo.image_url} alt={photo.label || ''} />
+                      ) : (
+                        <span className="text-xs text-gray-500">{i + 1}</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            
-            {/* Navigation */}
-            <div className="flex gap-3 mt-4">
-              <button 
-                className="btn-secondary flex-1"
-                onClick={() => setSelectedPhoto(Math.max(0, selectedPhoto - 1))}
-                disabled={selectedPhoto === 0}
-              >
-                <ChevronLeft className="w-4 h-4" /> Anterior
-              </button>
-              <button 
-                className="btn-secondary flex-1"
-                onClick={() => setSelectedPhoto(Math.min(11, selectedPhoto + 1))}
-                disabled={selectedPhoto === 11}
-              >
-                Siguiente <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+                
+                {/* Navigation */}
+                <div className="flex gap-3 mt-4">
+                  <button 
+                    className="btn-secondary flex-1"
+                    onClick={() => setSelectedPhoto(Math.max(0, selectedPhoto - 1))}
+                    disabled={selectedPhoto === 0}
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Anterior
+                  </button>
+                  <button 
+                    className="btn-secondary flex-1"
+                    onClick={() => setSelectedPhoto(Math.min(photos.length - 1, selectedPhoto + 1))}
+                    disabled={selectedPhoto === photos.length - 1}
+                  >
+                    Siguiente <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Client Comments */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <MessageSquare className="w-5 h-5 text-gray-400" />
-              <h3 className="font-semibold">Comentarios del Cliente</h3>
+          {inspection.client_comments && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <MessageSquare className="w-5 h-5 text-gray-400" />
+                <h3 className="font-semibold">Comentarios del Cliente</h3>
+              </div>
+              <p className="text-sm text-gray-300 leading-relaxed">{inspection.client_comments}</p>
             </div>
-            <p className="text-sm text-gray-300 leading-relaxed">{inspection.clientComments}</p>
-          </div>
+          )}
         </div>
 
         {/* Right Panel - Damages & Actions */}
-        <div className="w-[360px] border-l border-white/10 p-6 overflow-y-auto">
+        <div className="w-full lg:w-[360px] border-t lg:border-t-0 lg:border-l border-white/10 p-6 overflow-y-auto">
           {/* Tabs */}
           <div className="flex gap-2 mb-4">
             <button 
               className={`tab flex-1 text-sm ${activeTab === 'damages' ? 'active' : ''}`}
               onClick={() => setActiveTab('damages')}
             >
-              Daños
+              Daños ({damages.length})
             </button>
             <button 
               className={`tab flex-1 text-sm ${activeTab === 'consistency' ? 'active' : ''}`}
@@ -313,19 +461,21 @@ export default function InspectionDetail() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm">Fotos completas</span>
-                  <span className="badge badge-green">✓ OK</span>
+                  <span className={`badge ${vehiclePhotos.length >= 8 ? 'badge-green' : 'badge-yellow'}`}>
+                    {vehiclePhotos.length >= 8 ? '✓ OK' : `${vehiclePhotos.length}/8`}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">Datos coinciden</span>
-                  <span className="badge badge-green">✓ OK</span>
+                  <span className="text-sm">Datos del cliente</span>
+                  <span className={`badge ${inspection.client_name ? 'badge-green' : 'badge-yellow'}`}>
+                    {inspection.client_name ? '✓ OK' : 'Incompleto'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">Geolocalización</span>
-                  <span className="badge badge-green">✓ OK</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm">Fecha/Hora válida</span>
-                  <span className="badge badge-green">✓ OK</span>
+                  <span className="text-sm">Datos del vehículo</span>
+                  <span className={`badge ${inspection.vehicle_plate ? 'badge-green' : 'badge-yellow'}`}>
+                    {inspection.vehicle_plate ? '✓ OK' : 'Incompleto'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -346,14 +496,14 @@ export default function InspectionDetail() {
           <div className="card">
             <h3 className="font-semibold mb-3 text-sm">Decisión</h3>
             <div className="space-y-2">
-              <button onClick={handleApprove} className="btn-success w-full justify-center">
-                <CheckCircle className="w-4 h-4" /> Aprobar
+              <button onClick={handleApprove} disabled={saving} className="btn-success w-full justify-center">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Aprobar
               </button>
-              <button onClick={handleReinspection} className="btn-warning w-full justify-center">
-                <AlertTriangle className="w-4 h-4" /> Solicitar Reinspección
+              <button onClick={handleReinspection} disabled={saving} className="btn-warning w-full justify-center">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} Solicitar Reinspección
               </button>
-              <button onClick={handleEscalate} className="btn-danger w-full justify-center">
-                <XCircle className="w-4 h-4" /> Escalar a Supervisor
+              <button onClick={handleEscalate} disabled={saving} className="btn-danger w-full justify-center">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Escalar a Supervisor
               </button>
             </div>
           </div>

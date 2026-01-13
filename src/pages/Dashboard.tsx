@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Clock, Eye, CheckCircle, AlertTriangle, Search, Plus, 
-  BarChart3, ChevronDown, AlertCircle
+  BarChart3, AlertCircle, RefreshCw, Loader2
 } from 'lucide-react';
-import { mockInspections, getStats, type Inspection } from '../data/mockData';
-import { format, formatDistanceToNow } from 'date-fns';
+import { getInspections, getStats, type Inspection } from '../lib/supabase';
+import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const StatCard = ({ icon: Icon, label, value, subtitle, color }: any) => (
@@ -20,7 +20,6 @@ const StatCard = ({ icon: Icon, label, value, subtitle, color }: any) => (
     </div>
   </div>
 );
-
 
 const getPolicyStatusColor = (status: string) => {
   switch (status) {
@@ -48,90 +47,88 @@ const getRiskColor = (score: number) => {
 };
 
 const InspectionRow = ({ inspection, onClick }: { inspection: Inspection; onClick: () => void }) => {
-  const slaTime = formatDistanceToNow(new Date(inspection.slaDeadline), { locale: es, addSuffix: false });
+  const slaTime = inspection.sla_deadline 
+    ? formatDistanceToNow(new Date(inspection.sla_deadline), { locale: es, addSuffix: false })
+    : 'N/A';
+  
   const statusIndicator = inspection.status === 'Pendiente' ? 'bg-red-500' : 
                          inspection.status === 'En Revisión' ? 'bg-yellow-500' : 
                          inspection.status === 'Aprobada' ? 'bg-green-500' : 'bg-red-500';
 
+  const tags = Array.isArray(inspection.tags) ? inspection.tags : [];
+
   return (
     <div className="card card-hover cursor-pointer mb-3" onClick={onClick}>
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 flex-wrap">
         {/* Status Indicator */}
-        <div className={`w-3 h-3 rounded-full ${statusIndicator}`} />
+        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${statusIndicator}`} />
         
         {/* ID & Client Info */}
-        <div className="min-w-[200px]">
+        <div className="min-w-[180px] flex-1">
           <p className="font-semibold text-sm">{inspection.id}</p>
-          <p className="text-sm text-gray-400">{inspection.clientName}</p>
-          <p className="text-xs text-gray-500">{inspection.vehicle.brand} {inspection.vehicle.model} {inspection.vehicle.year}</p>
+          <p className="text-sm text-gray-400">{inspection.client_name || 'Sin nombre'}</p>
+          <p className="text-xs text-gray-500">
+            {inspection.vehicle_brand} {inspection.vehicle_model} {inspection.vehicle_year}
+          </p>
           <div className="flex gap-1 mt-2 flex-wrap">
-            {inspection.tags.slice(0, 3).map((tag, i) => (
+            {tags.slice(0, 3).map((tag, i) => (
               <span key={i} className={`badge ${getTagClass(tag)}`}>{tag}</span>
             ))}
           </div>
         </div>
         
         {/* Policy Type */}
-        <div className="min-w-[100px]">
-          <p className="text-xs text-gray-500">Policy Type</p>
-          <p className="font-medium">{inspection.policyType}</p>
+        <div className="min-w-[90px]">
+          <p className="text-xs text-gray-500">Tipo</p>
+          <p className="font-medium text-sm">{inspection.policy_type}</p>
         </div>
         
         {/* Policy Status */}
-        <div className="min-w-[100px]">
-          <p className="text-xs text-gray-500">Policy Status</p>
-          <p className={`font-medium ${getPolicyStatusColor(inspection.policyStatus)}`}>
-            {inspection.policyStatus}
+        <div className="min-w-[90px]">
+          <p className="text-xs text-gray-500">Estado</p>
+          <p className={`font-medium text-sm ${getPolicyStatusColor(inspection.policy_status)}`}>
+            {inspection.policy_status}
           </p>
         </div>
         
         {/* Risk Score */}
-        <div className="min-w-[80px]">
-          <p className="text-xs text-gray-500">Risk Score</p>
-          <p className="text-2xl font-bold" style={{ color: getRiskColor(inspection.riskScore) }}>
-            {inspection.riskScore}<span className="text-sm text-gray-500">/100</span>
+        <div className="min-w-[70px]">
+          <p className="text-xs text-gray-500">Risk</p>
+          <p className="text-xl font-bold" style={{ color: getRiskColor(inspection.risk_score) }}>
+            {inspection.risk_score}<span className="text-xs text-gray-500">/100</span>
           </p>
           <div className="progress-bar mt-1">
             <div 
               className="progress-fill" 
-              style={{ width: `${inspection.riskScore}%`, backgroundColor: getRiskColor(inspection.riskScore) }}
+              style={{ width: `${inspection.risk_score}%`, backgroundColor: getRiskColor(inspection.risk_score) }}
             />
           </div>
         </div>
         
         {/* Quality Score */}
-        <div className="min-w-[80px]">
-          <p className="text-xs text-gray-500">Quality Score</p>
-          <p className="text-2xl font-bold text-green-400">
-            {inspection.qualityScore}<span className="text-sm text-gray-500">/100</span>
+        <div className="min-w-[70px]">
+          <p className="text-xs text-gray-500">Quality</p>
+          <p className="text-xl font-bold text-green-400">
+            {inspection.quality_score}<span className="text-xs text-gray-500">/100</span>
           </p>
           <div className="progress-bar mt-1">
             <div 
               className="progress-fill" 
-              style={{ width: `${inspection.qualityScore}%`, backgroundColor: '#10b981' }}
+              style={{ width: `${inspection.quality_score}%`, backgroundColor: '#10b981' }}
             />
           </div>
         </div>
         
         {/* SLA */}
-        <div className="min-w-[100px]">
-          <p className="text-xs text-gray-500">SLA Restante</p>
-          <p className="font-semibold">{slaTime}</p>
-          <p className="text-xs text-gray-500">
-            {format(new Date(inspection.slaDeadline), 'yyyy-MM-dd HH:mm')}
-          </p>
+        <div className="min-w-[80px]">
+          <p className="text-xs text-gray-500">SLA</p>
+          <p className="font-semibold text-sm">{slaTime}</p>
         </div>
         
         {/* Actions */}
-        <div className="flex gap-2 ml-auto">
+        <div className="flex gap-2">
           <button className="btn-primary text-sm py-2 px-4">
             <Eye className="w-4 h-4" /> Revisar
-          </button>
-          <button className="btn-secondary text-sm py-2 px-3">
-            <CheckCircle className="w-4 h-4" />
-          </button>
-          <button className="btn-secondary text-sm py-2 px-3">
-            <AlertTriangle className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -141,14 +138,39 @@ const InspectionRow = ({ inspection, onClick }: { inspection: Inspection; onClic
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const stats = getStats();
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [stats, setStats] = useState({ pending: 0, review: 0, approved: 0, reinspection: 0, avgTime: '0h', autoApprovalRate: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   
-  const filteredInspections = mockInspections.filter(ins => {
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [inspectionsData, statsData] = await Promise.all([
+        getInspections(),
+        getStats()
+      ]);
+      setInspections(inspectionsData);
+      setStats(statsData);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Error al cargar datos. Verifica la conexión.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+  
+  const filteredInspections = inspections.filter(ins => {
     const matchesSearch = ins.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ins.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ins.vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase());
+                         (ins.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (ins.vehicle_plate || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || ins.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -166,6 +188,9 @@ export default function Dashboard() {
             <span className="badge badge-purple ml-2">Dashboard de Triage</span>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={loadData} className="btn-secondary" disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
             <button className="btn-primary">
               <Plus className="w-4 h-4" /> Crear Inspección
             </button>
@@ -177,13 +202,24 @@ export default function Dashboard() {
       </header>
 
       <main className="p-6">
+        {/* Error */}
+        {error && (
+          <div className="card mb-6 border-red-500/50 bg-red-500/10">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-400">{error}</p>
+              <button onClick={loadData} className="btn-secondary ml-auto text-sm">Reintentar</button>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <StatCard 
             icon={Clock} 
             label="Casos Pendientes" 
             value={stats.pending} 
-            subtitle={`+3 en las últimas 2h`}
+            subtitle="Esperando revisión"
             color="bg-yellow-500/20 text-yellow-400"
           />
           <StatCard 
@@ -195,7 +231,7 @@ export default function Dashboard() {
           />
           <StatCard 
             icon={CheckCircle} 
-            label="Aprobados Hoy" 
+            label="Aprobadas" 
             value={stats.approved} 
             subtitle={`${stats.autoApprovalRate}% auto-aprobación`}
             color="bg-green-500/20 text-green-400"
@@ -204,18 +240,18 @@ export default function Dashboard() {
             icon={AlertTriangle} 
             label="Reinspecciones" 
             value={stats.reinspection} 
-            subtitle="8% del total"
+            subtitle="Requieren atención"
             color="bg-red-500/20 text-red-400"
           />
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 mb-6">
-          <div className="flex-1 relative">
+        <div className="flex gap-3 mb-6 flex-wrap">
+          <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
             <input 
               type="text" 
-              placeholder="Buscar por número de caso, cliente o vehículo..."
+              placeholder="Buscar por ID, cliente o placa..."
               className="input pl-12"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -233,31 +269,39 @@ export default function Dashboard() {
             <option value="Rechazada">Rechazada</option>
             <option value="Reinspección">Reinspección</option>
           </select>
-          <button className="btn-secondary">
-            Todas las prioridades <ChevronDown className="w-4 h-4" />
-          </button>
-          <button className="btn-secondary">
-            Todos los tipos de póliza <ChevronDown className="w-4 h-4" />
-          </button>
         </div>
 
+        {/* Loading */}
+        {loading && (
+          <div className="card text-center py-12">
+            <Loader2 className="w-8 h-8 text-[#ec4899] mx-auto mb-4 animate-spin" />
+            <p className="text-gray-400">Cargando inspecciones...</p>
+          </div>
+        )}
+
         {/* Inspection List */}
-        <div>
-          {filteredInspections.map((inspection) => (
-            <InspectionRow 
-              key={inspection.id} 
-              inspection={inspection} 
-              onClick={() => navigate(`/inspection/${inspection.id}`)}
-            />
-          ))}
-          
-          {filteredInspections.length === 0 && (
-            <div className="card text-center py-12">
-              <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-              <p className="text-gray-400">No se encontraron inspecciones</p>
-            </div>
-          )}
-        </div>
+        {!loading && (
+          <div>
+            {filteredInspections.map((inspection) => (
+              <InspectionRow 
+                key={inspection.id} 
+                inspection={inspection} 
+                onClick={() => navigate(`/inspection/${inspection.id}`)}
+              />
+            ))}
+            
+            {filteredInspections.length === 0 && !error && (
+              <div className="card text-center py-12">
+                <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-400">
+                  {inspections.length === 0 
+                    ? 'No hay inspecciones aún. Las nuevas aparecerán aquí.'
+                    : 'No se encontraron inspecciones con ese filtro'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
