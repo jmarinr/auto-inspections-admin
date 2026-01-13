@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <script>
+      // Redirect to the hash-based route
+      var path = window.location.pathname;
+      var hash = window.location.hash;
+      if (path !== '/' && path !== '/index.html') {
+        window.location.replace('/#' + path + hash);
+      }
+    </script>
+  </head>
+  <body>
+    <p>Redirecting...</p>
+  </body>
+</html>

@@ -1,15 +1,15 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import InspectionDetail from './pages/InspectionDetail';
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/inspection/:id" element={<InspectionDetail />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
