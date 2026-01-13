@@ -3,19 +3,16 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/auto-inspections-admin/',
+  base: '/',
 })
 ```
 
-Haz commit de este cambio.
+Haz commit.
 
 ---
 
-### 4️⃣ Configurar Pages
+### Paso 3: Crear archivo CNAME
 
-1. Ve a **Settings** → **Pages**
-2. En **Source** selecciona **GitHub Actions**
-
-Después de esto, el workflow se ejecutará y tu sitio estará en:
+Crea un archivo nuevo en la carpeta `public/` llamado `CNAME` (sin extensión) con este contenido:
 ```
-https://jmarinr.github.io/auto-inspections-admin/
+inspections-admin.henkancx.com
