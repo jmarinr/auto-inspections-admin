@@ -33,6 +33,51 @@ function statusTone(status: Inspection['status']) {
   }
 }
 
+type Lang = 'es' | 'en';
+
+function fmtValue(value: unknown, lang: Lang): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? (lang === 'en' ? 'Yes' : 'Sí') : (lang === 'en' ? 'No' : 'No');
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '—';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '—';
+  if (typeof value === 'string') {
+    const s = value.trim();
+    return s.length ? s : '—';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function isProbablyUrl(v: unknown): v is string {
+  return typeof v === 'string' && /^https?:\/\//i.test(v);
+}
+
+function FieldRow({ label, value, lang }: { label: string; value: unknown; lang: Lang }) {
+  const rendered = fmtValue(value, lang);
+
+  return (
+    <div className="flex items-start justify-between gap-3 py-2">
+      <div className="min-w-0">
+        <div className="text-xs text-[rgb(var(--muted))]">{label}</div>
+        <div className="mt-0.5 text-sm text-[rgb(var(--fg))] break-words">{rendered}</div>
+      </div>
+      {isProbablyUrl(value) && (
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] px-3 py-1.5 text-xs text-[rgb(var(--fg))] hover:opacity-90"
+        >
+          {lang === 'en' ? 'Open' : 'Abrir'}
+        </a>
+      )}
+    </div>
+  );
+}
+
 export default function InspectionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -322,6 +367,151 @@ export default function InspectionDetail() {
                     </Badge>
                   </div>
                 </div>
+              </div>
+            </Card>
+
+            {/* Full data (100% of inspection fields) */}
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">{lang === 'en' ? 'Full details' : 'Datos completos'}</div>
+                <Badge tone="gray">{lang === 'en' ? 'All fields' : 'Todos los campos'}</Badge>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3" open>
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'General' : 'General'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label="ID" value={inspection.id} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Status' : 'Estado'} value={inspection.status} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Created' : 'Creada'} value={inspection.created_at} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Updated' : 'Actualizada'} value={inspection.updated_at} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Country' : 'País'} value={inspection.country} lang={lang as Lang} />
+                    <FieldRow label="Tags" value={inspection.tags} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'SLA deadline' : 'SLA límite'} value={inspection.sla_deadline} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Customer' : 'Cliente'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label={lang === 'en' ? 'Name' : 'Nombre'} value={inspection.client_name} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID' : 'Identificación'} value={inspection.client_id} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Phone' : 'Teléfono'} value={inspection.client_phone} lang={lang as Lang} />
+                    <FieldRow label="Email" value={inspection.client_email} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Address' : 'Dirección'} value={inspection.client_address} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Driver license' : 'Licencia'} value={inspection.client_driver_license} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID front image' : 'Cédula (frente)'} value={inspection.client_id_front_image} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID back image' : 'Cédula (reverso)'} value={inspection.client_id_back_image} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Customer comments' : 'Comentarios del cliente'} value={inspection.client_comments} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Vehicle' : 'Vehículo'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label="VIN" value={inspection.vehicle_vin} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Plate' : 'Placa'} value={inspection.vehicle_plate} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Brand' : 'Marca'} value={inspection.vehicle_brand} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Model' : 'Modelo'} value={inspection.vehicle_model} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Year' : 'Año'} value={inspection.vehicle_year} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Color' : 'Color'} value={inspection.vehicle_color} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Mileage' : 'Kilometraje'} value={inspection.vehicle_mileage} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Usage' : 'Uso'} value={inspection.vehicle_usage} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Has garage' : 'Tiene cochera'} value={inspection.vehicle_has_garage} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Policy' : 'Póliza'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label={lang === 'en' ? 'Policy number' : 'Número de póliza'} value={inspection.policy_number} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Claim number' : 'Número de reclamo'} value={inspection.claim_number} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Policy type' : 'Tipo de póliza'} value={inspection.policy_type} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Policy status' : 'Estado de póliza'} value={inspection.policy_status} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Scores' : 'Scores'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label="risk_score" value={inspection.risk_score} lang={lang as Lang} />
+                    <FieldRow label="quality_score" value={inspection.quality_score} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Accident' : 'Accidente'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label={lang === 'en' ? 'Accident type' : 'Tipo'} value={inspection.accident_type} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Date' : 'Fecha'} value={inspection.accident_date} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Location' : 'Ubicación'} value={inspection.accident_location} lang={lang as Lang} />
+                    <FieldRow label="Lat" value={inspection.accident_lat} lang={lang as Lang} />
+                    <FieldRow label="Lng" value={inspection.accident_lng} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Description' : 'Descripción'} value={inspection.accident_description} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Sketch URL' : 'Boceto URL'} value={inspection.accident_sketch_url} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Has witnesses' : 'Hay testigos'} value={inspection.has_witnesses} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Witness info' : 'Info testigos'} value={inspection.witness_info} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Police present' : 'Policía presente'} value={inspection.police_present} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Police report #' : 'Parte policial #'} value={inspection.police_report_number} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Third party' : 'Tercero'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label={lang === 'en' ? 'Has third party' : 'Hay tercero'} value={inspection.has_third_party} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Name' : 'Nombre'} value={inspection.third_party_name} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID' : 'Identificación'} value={inspection.third_party_id} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Phone' : 'Teléfono'} value={inspection.third_party_phone} lang={lang as Lang} />
+                    <FieldRow label="Email" value={inspection.third_party_email} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID front image' : 'ID (frente)'} value={inspection.third_party_id_front_image} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'ID back image' : 'ID (reverso)'} value={inspection.third_party_id_back_image} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Vehicle plate' : 'Placa vehículo'} value={inspection.third_party_vehicle_plate} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Vehicle brand' : 'Marca vehículo'} value={inspection.third_party_vehicle_brand} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Vehicle model' : 'Modelo vehículo'} value={inspection.third_party_vehicle_model} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Vehicle year' : 'Año vehículo'} value={inspection.third_party_vehicle_year} lang={lang as Lang} />
+                    <FieldRow label={lang === 'en' ? 'Vehicle color' : 'Color vehículo'} value={inspection.third_party_vehicle_color} lang={lang as Lang} />
+                  </div>
+                </details>
+
+                <details className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-3">
+                  <summary className="cursor-pointer list-none select-none text-sm font-medium text-[rgb(var(--fg))] flex items-center justify-between">
+                    <span>{lang === 'en' ? 'Reviewer notes (saved)' : 'Notas del revisor (guardadas)'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] group-open:hidden">{lang === 'en' ? 'Show' : 'Ver'}</span>
+                    <span className="text-xs text-[rgb(var(--muted))] hidden group-open:inline">{lang === 'en' ? 'Hide' : 'Ocultar'}</span>
+                  </summary>
+                  <div className="mt-2 divide-y divide-[rgb(var(--border))]">
+                    <FieldRow label="review_notes" value={inspection.review_notes} lang={lang as Lang} />
+                  </div>
+                </details>
               </div>
             </Card>
 
