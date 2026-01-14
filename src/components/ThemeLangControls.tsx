@@ -1,4 +1,3 @@
-import React from 'react';
 import { Moon, Sun, Languages } from 'lucide-react';
 import Button from './Button';
 import { useTheme } from '../contexts/ThemeContext';

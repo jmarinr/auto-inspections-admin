@@ -220,7 +220,7 @@ export default function InspectionDetail() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
-                  {groupedPhotos.slice(0, 20).map((p, idx) => {
+                  {groupedPhotos.slice(0, 20).map((p) => {
                     const url = p.thumbnail_url || p.image_url;
                     const isActive = photos[selectedIndex]?.id === p.id;
                     return (
