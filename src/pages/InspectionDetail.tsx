@@ -1,416 +1,371 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Loader2, X, Eye } from 'lucide-react';
-import { 
-  getInspectionById, getDamagesByInspection, getPhotosByInspection,
-  updateInspectionStatus, updateDamageApproval,
-  type Inspection, type Damage, type Photo
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft, CheckCircle2, XCircle, RotateCcw, Loader2, ChevronLeft, ChevronRight, Expand, X
+} from 'lucide-react';
+
+import {
+  getInspectionById,
+  getDamagesByInspection,
+  getPhotosByInspection,
+  updateDamageApproval,
+  updateInspectionStatus,
+  type Inspection,
+  type Damage,
+  type Photo,
 } from '../lib/supabase';
+
+import AppShell from '../components/AppShell';
+import Card from '../components/Card';
+import Button from '../components/Button';
+import Badge from '../components/Badge';
+import { Input } from '../components/Field';
+import { useI18n } from '../contexts/LanguageContext';
+
+function statusTone(status: Inspection['status']) {
+  switch (status) {
+    case 'Pendiente': return 'yellow';
+    case 'En Revisión': return 'blue';
+    case 'Aprobada': return 'green';
+    case 'Rechazada': return 'red';
+    case 'Reinspección': return 'pink';
+    default: return 'gray';
+  }
+}
 
 export default function InspectionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+  const { lang } = useI18n();
+
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [damages, setDamages] = useState<Damage[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-  const [reviewNotes, setReviewNotes] = useState('');
-  const [modalImage, setModalImage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'damages' | 'consistency'>('damages');
-  
-  useEffect(() => { loadData(); }, [id]);
 
-  const loadData = async () => {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [activeTab, setActiveTab] = useState<'photos' | 'damages'>('photos');
+  const [modalUrl, setModalUrl] = useState<string | null>(null);
+
+  useEffect(() => { load(); }, [id]);
+
+  const load = async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [ins, dam, pho] = await Promise.all([
-        getInspectionById(id), getDamagesByInspection(id), getPhotosByInspection(id)
+      const [ins, dmg, ph] = await Promise.all([
+        getInspectionById(id),
+        getDamagesByInspection(id),
+        getPhotosByInspection(id),
       ]);
-      setInspection(ins); setDamages(dam || []); setPhotos(pho || []);
-      setReviewNotes(ins.review_notes || '');
-    } catch (e) { console.error(e); } 
-    finally { setLoading(false); }
+      setInspection(ins);
+      setDamages(dmg);
+      setPhotos(ph);
+      setSelectedIndex(0);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
-  
-  const handleAction = async (status: Inspection['status']) => {
-    if (!inspection) return;
-    setSaving(true);
-    try {
-      await updateInspectionStatus(inspection.id, status, reviewNotes);
-      navigate('/');
-    } catch {} finally { setSaving(false); }
+
+  const mainPhoto = photos[selectedIndex]?.image_url || photos[selectedIndex]?.thumbnail_url || null;
+
+  const groupedPhotos = useMemo(() => {
+    const items = [...photos];
+    items.sort((a, b) => (a.photo_type || '').localeCompare(b.photo_type || '') || (a.id).localeCompare(b.id));
+    return items;
+  }, [photos]);
+
+  const setIndexSafe = (i: number) => {
+    if (photos.length === 0) return;
+    const next = (i + photos.length) % photos.length;
+    setSelectedIndex(next);
   };
-  
+
   const toggleDamage = async (damageId: string, approved: boolean) => {
     await updateDamageApproval(damageId, approved);
     setDamages(prev => prev.map(d => d.id === damageId ? { ...d, approved } : d));
   };
 
-  const calculateSLA = () => {
-    if (!inspection?.sla_deadline) return 'N/A';
-    const deadline = new Date(inspection.sla_deadline);
-    const now = new Date();
-    const diff = deadline.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (diff <= 0) return 'Vencido';
-    return `${hours}h ${minutes}m`;
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Pendiente': return 'bg-yellow-500 text-black';
-      case 'En Revisión': return 'bg-blue-500 text-white';
-      case 'Aprobada': return 'bg-emerald-500 text-white';
-      case 'Rechazada': return 'bg-red-500 text-white';
-      case 'Reinspección': return 'bg-pink-500 text-white';
-      default: return 'bg-gray-500 text-white';
+  const handleAction = async (status: Inspection['status']) => {
+    if (!inspection) return;
+    setSaving(true);
+    try {
+      await updateInspectionStatus(inspection.id, status, notes);
+      navigate('/');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
     }
   };
-
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'Leve': return 'bg-emerald-500 text-white';
-      case 'Moderado': return 'bg-yellow-500 text-black';
-      case 'Severo': return 'bg-orange-500 text-white';
-      default: return 'bg-red-500 text-white';
-    }
-  };
-
-  const getRiskColor = (score: number) => {
-    if (score >= 70) return 'bg-red-500';
-    if (score >= 50) return 'bg-yellow-500';
-    return 'bg-emerald-500';
-  };
-
-  const getRiskTextColor = (score: number) => {
-    if (score >= 70) return 'text-red-400';
-    if (score >= 50) return 'text-yellow-400';
-    return 'text-emerald-400';
-  };
-
-  if (loading) return (
-    <div className="min-h-screen bg-[#0d1421] flex items-center justify-center">
-      <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
-    </div>
-  );
-  
-  if (!inspection) return (
-    <div className="min-h-screen bg-[#0d1421] flex items-center justify-center">
-      <button onClick={() => navigate('/')} className="px-6 py-3 bg-pink-500 rounded-lg font-medium text-white">← Volver</button>
-    </div>
-  );
-
-  const currentPhoto = photos[selectedPhotoIndex];
 
   return (
-    <div className="min-h-screen bg-[#0d1421]">
-      {/* Modal */}
-      {modalImage && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-8" onClick={() => setModalImage(null)}>
-          <button className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-lg">
-            <X className="w-6 h-6 text-white" />
-          </button>
-          <img src={modalImage} className="max-w-full max-h-full object-contain rounded-lg" />
+    <AppShell
+      title={lang === 'en' ? 'Inspection' : 'Inspección'}
+      subtitle={
+        inspection ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={statusTone(inspection.status) as any}>{inspection.status}</Badge>
+            <Badge tone="blue">ID: {inspection.id}</Badge>
+            {inspection.vehicle_plate && <Badge tone="gray">{lang === 'en' ? 'Plate' : 'Placa'}: {inspection.vehicle_plate}</Badge>}
+          </div>
+        ) : undefined
+      }
+    >
+      {/* Header actions */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button variant="ghost" onClick={() => navigate('/')} aria-label="Back">
+          <ArrowLeft className="h-4 w-4" />
+          {lang === 'en' ? 'Back' : 'Volver'}
+        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleAction('Reinspección')}
+            disabled={saving || loading}
+          >
+            <RotateCcw className="h-4 w-4" />
+            {lang === 'en' ? 'Request re-inspection' : 'Pedir reinspección'}
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => handleAction('Rechazada')}
+            disabled={saving || loading}
+          >
+            <XCircle className="h-4 w-4" />
+            {lang === 'en' ? 'Reject' : 'Rechazar'}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleAction('Aprobada')}
+            disabled={saving || loading}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {lang === 'en' ? 'Approve' : 'Aprobar'}
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <Card className="p-6 text-[rgb(var(--muted))]">{lang === 'en' ? 'Loading…' : 'Cargando…'}</Card>
+      ) : !inspection ? (
+        <Card className="p-6 text-[rgb(var(--muted))]">{lang === 'en' ? 'Not found.' : 'No encontrado.'}</Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          {/* Left: media */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={activeTab === 'photos' ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => setActiveTab('photos')}
+                >
+                  {lang === 'en' ? 'Photos' : 'Fotos'}
+                </Button>
+                <Button
+                  variant={activeTab === 'damages' ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => setActiveTab('damages')}
+                >
+                  {lang === 'en' ? 'Damages' : 'Daños'}
+                </Button>
+              </div>
+
+              {mainPhoto && (
+                <Button variant="secondary" size="sm" onClick={() => setModalUrl(mainPhoto)}>
+                  <Expand className="h-4 w-4" />
+                  {lang === 'en' ? 'Expand' : 'Ampliar'}
+                </Button>
+              )}
+            </div>
+
+            {activeTab === 'photos' && (
+              <div className="mt-4">
+                <div className="relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))]">
+                  <div className="aspect-[16/10] w-full flex items-center justify-center">
+                    {mainPhoto ? (
+                      <img src={mainPhoto} alt="Inspection" className="max-h-full max-w-full object-contain" />
+                    ) : (
+                      <div className="text-sm text-[rgb(var(--muted))]">{lang === 'en' ? 'No photos.' : 'Sin fotos.'}</div>
+                    )}
+                  </div>
+
+                  {photos.length > 1 && (
+                    <>
+                      <button
+                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-xl border border-[rgb(var(--border))] bg-[rgba(255,255,255,0.85)] px-2 py-2 shadow-sm dark:bg-[rgba(0,0,0,0.35)]"
+                        onClick={() => setIndexSafe(selectedIndex - 1)}
+                        aria-label="Previous photo"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl border border-[rgb(var(--border))] bg-[rgba(255,255,255,0.85)] px-2 py-2 shadow-sm dark:bg-[rgba(0,0,0,0.35)]"
+                        onClick={() => setIndexSafe(selectedIndex + 1)}
+                        aria-label="Next photo"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                  {groupedPhotos.slice(0, 20).map((p, idx) => {
+                    const url = p.thumbnail_url || p.image_url;
+                    const isActive = photos[selectedIndex]?.id === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        className={[
+                          'overflow-hidden rounded-xl border transition',
+                          isActive ? 'border-[rgba(var(--ring)/0.7)] shadow-sm' : 'border-[rgb(var(--border))] hover:bg-[rgb(var(--card-2))]'
+                        ].join(' ')}
+                        onClick={() => {
+                          const i = photos.findIndex(pp => pp.id === p.id);
+                          if (i >= 0) setSelectedIndex(i);
+                        }}
+                        aria-label="Select photo"
+                      >
+                        <div className="aspect-[4/3] bg-[rgb(var(--card-2))] flex items-center justify-center">
+                          {url ? <img src={url} alt="thumb" className="h-full w-full object-cover" /> : <span className="text-xs text-[rgb(var(--muted))]">—</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'damages' && (
+              <div className="mt-4 space-y-3">
+                {damages.length === 0 ? (
+                  <div className="text-sm text-[rgb(var(--muted))]">{lang === 'en' ? 'No damages detected.' : 'No se detectaron daños.'}</div>
+                ) : (
+                  damages.map((d) => (
+                    <div key={d.id} className="rounded-2xl border border-[rgb(var(--border))] p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium text-[rgb(var(--fg))]">{d.part} · {d.type}</div>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <Badge tone={d.severity === 'Severo' || d.severity === 'Pérdida total' ? 'red' : d.severity === 'Moderado' ? 'yellow' : 'green'}>
+                              {d.severity}
+                            </Badge>
+                            <Badge tone="blue">Conf: {Math.round((d.confidence ?? 0) * 100)}%</Badge>
+                            {d.approved === true && <Badge tone="green">{lang === 'en' ? 'Approved' : 'Aprobado'}</Badge>}
+                            {d.approved === false && <Badge tone="red">{lang === 'en' ? 'Rejected' : 'Rechazado'}</Badge>}
+                          </div>
+                          {d.description && <div className="mt-2 text-sm text-[rgb(var(--muted))]">{d.description}</div>}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => toggleDamage(d.id, true)}
+                          >
+                            {lang === 'en' ? 'Approve' : 'Aprobar'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => toggleDamage(d.id, false)}
+                          >
+                            {lang === 'en' ? 'Reject' : 'Rechazar'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Right: info + notes */}
+          <div className="space-y-4">
+            <Card className="p-4">
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">{lang === 'en' ? 'Summary' : 'Resumen'}</div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-[rgb(var(--card-2))] p-3 border border-[rgb(var(--border))]">
+                  <div className="text-xs text-[rgb(var(--muted))]">{lang === 'en' ? 'Customer' : 'Cliente'}</div>
+                  <div className="mt-1 font-medium">{inspection.client_name ?? '—'}</div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">{inspection.client_phone ?? ''}</div>
+                </div>
+                <div className="rounded-2xl bg-[rgb(var(--card-2))] p-3 border border-[rgb(var(--border))]">
+                  <div className="text-xs text-[rgb(var(--muted))]">{lang === 'en' ? 'Vehicle' : 'Vehículo'}</div>
+                  <div className="mt-1 font-medium">{inspection.vehicle_brand ?? ''} {inspection.vehicle_model ?? ''}</div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">{inspection.vehicle_plate ?? '—'} · {inspection.vehicle_year ?? '—'}</div>
+                </div>
+                <div className="rounded-2xl bg-[rgb(var(--card-2))] p-3 border border-[rgb(var(--border))]">
+                  <div className="text-xs text-[rgb(var(--muted))]">{lang === 'en' ? 'Policy' : 'Póliza'}</div>
+                  <div className="mt-1 font-medium">{inspection.policy_type} · {inspection.policy_status}</div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">{inspection.policy_number ?? '—'} · {inspection.claim_number ?? '—'}</div>
+                </div>
+                <div className="rounded-2xl bg-[rgb(var(--card-2))] p-3 border border-[rgb(var(--border))]">
+                  <div className="text-xs text-[rgb(var(--muted))]">{lang === 'en' ? 'Scores' : 'Scores'}</div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <Badge tone={inspection.risk_score >= 80 ? 'red' : inspection.risk_score >= 50 ? 'yellow' : 'green'}>
+                      Risk: {Math.round(inspection.risk_score)}
+                    </Badge>
+                    <Badge tone={inspection.quality_score >= 80 ? 'green' : inspection.quality_score >= 50 ? 'yellow' : 'red'}>
+                      Quality: {Math.round(inspection.quality_score)}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">{lang === 'en' ? 'Review notes' : 'Notas de revisión'}</div>
+                <Badge tone="gray">{lang === 'en' ? 'Saved with decision' : 'Se guarda con la decisión'}</Badge>
+              </div>
+              <div className="mt-3">
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={lang === 'en' ? 'Write a short note (optional)…' : 'Escribe una nota corta (opcional)…'}
+                />
+                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
+                  {lang === 'en'
+                    ? 'Tip: note the reason for re-inspection or rejection for audit & training.'
+                    : 'Tip: documenta el motivo de reinspección o rechazo (auditoría y entrenamiento).'}
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       )}
 
-      {/* Header */}
-      <header className="px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Volver</span>
-          </button>
-          <div>
-            <p className="font-mono text-sm font-semibold text-white">{inspection.id}</p>
-            <p className="text-sm text-gray-400">{inspection.client_name} • {inspection.vehicle_brand} {inspection.vehicle_model} {inspection.vehicle_year}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <span className={`px-3 py-1 text-xs font-semibold rounded ${getStatusBadge(inspection.status)}`}>
-            {inspection.status}
-          </span>
-          <span className="px-3 py-1 text-xs font-semibold rounded bg-cyan-500/20 text-cyan-400">
-            SLA: {calculateSLA()}
-          </span>
-        </div>
-      </header>
-
-      {/* Main Content - 3 Columns */}
-      <main className="px-6 pb-6">
-        <div className="grid grid-cols-12 gap-5">
-          
-          {/* Left Column */}
-          <div className="col-span-3 space-y-5">
-            {/* Cliente Info */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Información del Cliente</h3>
-              <div className="space-y-3">
-                <InfoRow label="Nombre" value={inspection.client_name} />
-                <InfoRow label="ID" value={inspection.client_id} />
-                <InfoRow label="Teléfono" value={inspection.client_phone} />
-                <InfoRow label="Email" value={inspection.client_email} />
-              </div>
-            </div>
-
-            {/* Vehículo Info */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Datos del Vehículo</h3>
-              <div className="space-y-3">
-                <InfoRow label="VIN" value={inspection.vehicle_vin} mono />
-                <InfoRow label="Placa" value={inspection.vehicle_plate} />
-                <InfoRow label="Marca/Modelo" value={`${inspection.vehicle_brand} ${inspection.vehicle_model}`} />
-                <InfoRow label="Año" value={inspection.vehicle_year} />
-                <InfoRow label="Color" value={inspection.vehicle_color} />
-                <InfoRow label="Kilometraje" value={inspection.vehicle_mileage ? `${inspection.vehicle_mileage.toLocaleString()} km` : null} />
-                <InfoRow label="Uso" value={inspection.vehicle_usage === 'private' ? 'Particular' : inspection.vehicle_usage} />
-              </div>
-            </div>
-
-            {/* Scores */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Scores</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-sm text-gray-400">Risk</span>
-                    <span className={`text-sm font-semibold ${getRiskTextColor(inspection.risk_score)}`}>{inspection.risk_score}/100</span>
-                  </div>
-                  <div className="h-1.5 bg-[#2a3a4f] rounded-full">
-                    <div className={`h-full rounded-full ${getRiskColor(inspection.risk_score)}`} style={{ width: `${inspection.risk_score}%` }}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-sm text-gray-400">Quality</span>
-                    <span className="text-sm font-semibold text-emerald-400">{inspection.quality_score}/100</span>
-                  </div>
-                  <div className="h-1.5 bg-[#2a3a4f] rounded-full">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${inspection.quality_score}%` }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Center Column */}
-          <div className="col-span-6 space-y-5">
-            {/* Image Viewer */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-white">Visor de Imágenes</h3>
-                <span className="text-xs text-gray-400">{photos.length > 0 ? `${selectedPhotoIndex + 1}/${photos.length}` : '0/0'}</span>
-              </div>
-              
-              {/* Main Image Area */}
-              <div 
-                className="aspect-[16/10] bg-[#0d1421] rounded-lg mb-4 flex items-center justify-center cursor-pointer relative group"
-                onClick={() => currentPhoto?.image_url && setModalImage(currentPhoto.image_url)}
+      {/* Simple modal */}
+      {modalUrl && (
+        <div className="fixed inset-0 z-50 bg-black/60 p-4" role="dialog" aria-modal="true" onClick={() => setModalUrl(null)}>
+          <div className="mx-auto max-w-6xl h-full flex items-center justify-center">
+            <div className="relative w-full rounded-3xl bg-[rgb(var(--card))] border border-[rgb(var(--border))] p-3" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="absolute right-3 top-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card-2))] p-2"
+                onClick={() => setModalUrl(null)}
+                aria-label="Close"
               >
-                {currentPhoto?.image_url ? (
-                  <>
-                    <img src={currentPhoto.image_url} className="max-w-full max-h-full object-contain" />
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-                      <Eye className="w-8 h-8 text-white" />
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-gray-500">{currentPhoto?.label || 'Frontal'}</span>
-                )}
-              </div>
-
-              {/* Thumbnail Grid */}
-              <div className="grid grid-cols-6 gap-2 mb-4">
-                {Array.from({ length: 12 }).map((_, idx) => {
-                  const photo = photos[idx];
-                  const isSelected = selectedPhotoIndex === idx;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => photo && setSelectedPhotoIndex(idx)}
-                      className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
-                        isSelected ? 'border-pink-500' : 'border-[#2a3a4f] hover:border-gray-600'
-                      } ${!photo ? 'opacity-50' : ''}`}
-                    >
-                      {photo?.image_url ? (
-                        <img src={photo.image_url} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-[#1e2a3b] flex items-center justify-center">
-                          <span className="text-xs text-gray-600">{idx + 1}</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Navigation */}
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setSelectedPhotoIndex(Math.max(0, selectedPhotoIndex - 1))}
-                  disabled={selectedPhotoIndex === 0}
-                  className="flex-1 py-2.5 bg-[#1e2a3b] rounded-lg text-sm text-gray-400 font-medium disabled:opacity-30 hover:bg-[#2a3a4f] transition-all flex items-center justify-center gap-2"
-                >
-                  <ChevronLeft className="w-4 h-4" /> Anterior
-                </button>
-                <button 
-                  onClick={() => setSelectedPhotoIndex(Math.min(photos.length - 1, selectedPhotoIndex + 1))}
-                  disabled={selectedPhotoIndex >= photos.length - 1}
-                  className="flex-1 py-2.5 bg-[#1e2a3b] rounded-lg text-sm text-white font-medium disabled:opacity-30 hover:bg-[#2a3a4f] transition-all flex items-center justify-center gap-2"
-                >
-                  Siguiente <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Client Comments */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-4 h-4 text-gray-400" />
-                <h3 className="text-sm font-semibold text-white">Comentarios del Cliente</h3>
-              </div>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                {inspection.client_comments || inspection.accident_description || 'El vehículo ha sido siempre guardado en garage. El rayón de la puerta izquierda fue causado en un estacionamiento. Las llantas fueron cambiadas hace 3 meses.'}
-              </p>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="col-span-3 space-y-5">
-            {/* Damages Tabs */}
-            <div className="bg-[#151d2b] rounded-xl overflow-hidden">
-              <div className="flex">
-                <button
-                  onClick={() => setActiveTab('damages')}
-                  className={`flex-1 py-3 text-sm font-medium transition-all ${
-                    activeTab === 'damages' ? 'bg-pink-500 text-white' : 'bg-[#1e2a3b] text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Daños
-                </button>
-                <button
-                  onClick={() => setActiveTab('consistency')}
-                  className={`flex-1 py-3 text-sm font-medium transition-all ${
-                    activeTab === 'consistency' ? 'bg-pink-500 text-white' : 'bg-[#1e2a3b] text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Consistencia
-                </button>
-              </div>
-              
-              <div className="p-4 max-h-[320px] overflow-y-auto">
-                {activeTab === 'damages' ? (
-                  damages.length > 0 ? (
-                    <div className="space-y-3">
-                      {damages.map((damage) => (
-                        <div key={damage.id} className="p-3 bg-[#0d1421] rounded-lg">
-                          <div className="flex items-start justify-between mb-1">
-                            <div>
-                              <p className="text-sm font-medium text-white">{damage.part}</p>
-                              <p className="text-xs text-gray-500">{damage.type}</p>
-                            </div>
-                            <span className={`px-2 py-0.5 text-xs font-semibold rounded ${getSeverityBadge(damage.severity)}`}>
-                              {damage.severity}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-2">
-                            <span className="text-xs text-gray-500">IA: {damage.confidence}%</span>
-                            <div className="flex gap-1.5">
-                              <button 
-                                onClick={() => toggleDamage(damage.id, true)}
-                                className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-                                  damage.approved === true ? 'bg-emerald-500 text-white' : 'bg-[#1e2a3b] text-emerald-400 hover:bg-emerald-500/20'
-                                }`}
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                onClick={() => toggleDamage(damage.id, false)}
-                                className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-                                  damage.approved === false ? 'bg-red-500 text-white' : 'bg-[#1e2a3b] text-red-400 hover:bg-red-500/20'
-                                }`}
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-8 text-center">
-                      <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">Sin daños detectados</p>
-                    </div>
-                  )
-                ) : (
-                  <div className="py-8 text-center">
-                    <p className="text-sm text-gray-500">Análisis de consistencia próximamente</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Review Notes */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-3">Notas de Revisión</h3>
-              <textarea 
-                className="w-full h-24 bg-[#0d1421] border border-[#2a3a4f] rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-none focus:outline-none focus:border-pink-500"
-                placeholder="Agrega notas sobre tu revisión..."
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-              />
-            </div>
-
-            {/* Decision Buttons */}
-            <div className="bg-[#151d2b] rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-white mb-3">Decisión</h3>
-              <div className="space-y-2.5">
-                <button 
-                  onClick={() => handleAction('Aprobada')} 
-                  disabled={saving}
-                  className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Aprobar
-                </button>
-                <button 
-                  onClick={() => handleAction('Reinspección')} 
-                  disabled={saving}
-                  className="w-full py-2.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <AlertTriangle className="w-4 h-4" />
-                  Solicitar Reinspección
-                </button>
-                <button 
-                  onClick={() => handleAction('Rechazada')} 
-                  disabled={saving}
-                  className="w-full py-2.5 bg-pink-500/20 hover:bg-pink-500/30 text-pink-400 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Escalar a Supervisor
-                </button>
+                <X className="h-5 w-5" />
+              </button>
+              <div className="max-h-[80vh] overflow-auto rounded-2xl bg-[rgb(var(--card-2))] flex items-center justify-center">
+                <img src={modalUrl} alt="Expanded" className="max-h-[80vh] w-auto object-contain" />
               </div>
             </div>
           </div>
         </div>
-      </main>
-    </div>
-  );
-}
-
-function InfoRow({ label, value, mono }: { label: string; value: any; mono?: boolean }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <p className={`text-sm text-white ${mono ? 'font-mono' : ''}`}>{value || '—'}</p>
-    </div>
+      )}
+    </AppShell>
   );
 }

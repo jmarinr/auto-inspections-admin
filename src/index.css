@@ -1,22 +1,63 @@
 @import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+:root{
+  /* RGB tokens (space-separated) so Tailwind can do: rgb(var(--token) / <alpha-value>) */
+  --bg: 255 255 255;
+  --fg: 15 23 42;          /* slate-900 */
+  --muted: 71 85 105;      /* slate-600 */
+  --muted-2: 100 116 139;  /* slate-500 */
+  --card: 255 255 255;
+  --card-2: 248 250 252;   /* slate-50 */
+  --border: 226 232 240;   /* slate-200 */
+  --ring: 59 130 246;      /* blue-500 */
+  --shadow: 15 23 42;
+
+  /* Accents */
+  --blue: 37 99 235;       /* blue-600 */
+  --green: 22 163 74;      /* green-600 */
+  --yellow: 234 179 8;     /* yellow-500 */
+  --red: 220 38 38;        /* red-600 */
+
+  /* Layout */
+  --radius: 16px;
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #0d1421;
-  color: #ffffff;
-  line-height: 1.5;
+html.dark{
+  --bg: 10 14 23;          /* near #0a0e17 */
+  --fg: 226 232 240;       /* slate-200 */
+  --muted: 148 163 184;    /* slate-400 */
+  --muted-2: 100 116 139;  /* slate-500 */
+  --card: 17 24 39;        /* slate-900-ish */
+  --card-2: 15 23 42;      /* slate-900 */
+  --border: 51 65 85;      /* slate-700 */
+  --ring: 96 165 250;      /* blue-400 */
+  --shadow: 0 0 0;
+}
+
+*{ box-sizing:border-box; }
+body{
+  margin:0;
+  font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  line-height:1.5;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  min-height:100vh;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #151d2b; }
-::-webkit-scrollbar-thumb { background: #2a3a4f; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a4a5f; }
+a{ color: inherit; text-decoration:none; }
+button,input,select,textarea{ font: inherit; }
+
+/* Nice, subtle scrollbars */
+*{ scrollbar-width: thin; scrollbar-color: rgba(100,116,139,.55) transparent; }
+*::-webkit-scrollbar{ width: 10px; height:10px; }
+*::-webkit-scrollbar-thumb{ background: rgba(100,116,139,.45); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-track{ background: transparent; }
+
+/* Focus ring consistent */
+:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--ring) / .25);
+  border-radius: 10px;
+}
