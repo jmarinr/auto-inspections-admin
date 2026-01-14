@@ -95,13 +95,13 @@ export default function InspectionDetail() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0c1117] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0d1421] flex items-center justify-center">
       <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
     </div>
   );
   
   if (!inspection) return (
-    <div className="min-h-screen bg-[#0c1117] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0d1421] flex items-center justify-center">
       <button onClick={() => navigate('/')} className="px-6 py-3 bg-pink-500 rounded-lg font-medium text-white">← Volver</button>
     </div>
   );
@@ -109,7 +109,7 @@ export default function InspectionDetail() {
   const currentPhoto = photos[selectedPhotoIndex];
 
   return (
-    <div className="min-h-screen bg-[#0c1117]">
+    <div className="min-h-screen bg-[#0d1421]">
       {/* Modal */}
       {modalImage && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-8" onClick={() => setModalImage(null)}>
@@ -150,7 +150,7 @@ export default function InspectionDetail() {
           {/* Left Column */}
           <div className="col-span-3 space-y-5">
             {/* Cliente Info */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Información del Cliente</h3>
               <div className="space-y-3">
                 <InfoRow label="Nombre" value={inspection.client_name} />
@@ -161,7 +161,7 @@ export default function InspectionDetail() {
             </div>
 
             {/* Vehículo Info */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Datos del Vehículo</h3>
               <div className="space-y-3">
                 <InfoRow label="VIN" value={inspection.vehicle_vin} mono />
@@ -175,7 +175,7 @@ export default function InspectionDetail() {
             </div>
 
             {/* Scores */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Scores</h3>
               <div className="space-y-4">
                 <div>
@@ -183,7 +183,7 @@ export default function InspectionDetail() {
                     <span className="text-sm text-gray-400">Risk</span>
                     <span className={`text-sm font-semibold ${getRiskTextColor(inspection.risk_score)}`}>{inspection.risk_score}/100</span>
                   </div>
-                  <div className="h-1.5 bg-[#2a3544] rounded-full">
+                  <div className="h-1.5 bg-[#2a3a4f] rounded-full">
                     <div className={`h-full rounded-full ${getRiskColor(inspection.risk_score)}`} style={{ width: `${inspection.risk_score}%` }}></div>
                   </div>
                 </div>
@@ -192,7 +192,7 @@ export default function InspectionDetail() {
                     <span className="text-sm text-gray-400">Quality</span>
                     <span className="text-sm font-semibold text-emerald-400">{inspection.quality_score}/100</span>
                   </div>
-                  <div className="h-1.5 bg-[#2a3544] rounded-full">
+                  <div className="h-1.5 bg-[#2a3a4f] rounded-full">
                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${inspection.quality_score}%` }}></div>
                   </div>
                 </div>
@@ -203,7 +203,7 @@ export default function InspectionDetail() {
           {/* Center Column */}
           <div className="col-span-6 space-y-5">
             {/* Image Viewer */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-white">Visor de Imágenes</h3>
                 <span className="text-xs text-gray-400">{photos.length > 0 ? `${selectedPhotoIndex + 1}/${photos.length}` : '0/0'}</span>
@@ -211,7 +211,7 @@ export default function InspectionDetail() {
               
               {/* Main Image Area */}
               <div 
-                className="aspect-[16/10] bg-[#0c1117] rounded-lg mb-4 flex items-center justify-center cursor-pointer relative group"
+                className="aspect-[16/10] bg-[#0d1421] rounded-lg mb-4 flex items-center justify-center cursor-pointer relative group"
                 onClick={() => currentPhoto?.image_url && setModalImage(currentPhoto.image_url)}
               >
                 {currentPhoto?.image_url ? (
@@ -236,13 +236,13 @@ export default function InspectionDetail() {
                       key={idx}
                       onClick={() => photo && setSelectedPhotoIndex(idx)}
                       className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
-                        isSelected ? 'border-pink-500' : 'border-[#2a3544] hover:border-gray-600'
+                        isSelected ? 'border-pink-500' : 'border-[#2a3a4f] hover:border-gray-600'
                       } ${!photo ? 'opacity-50' : ''}`}
                     >
                       {photo?.image_url ? (
                         <img src={photo.image_url} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full bg-[#1a2332] flex items-center justify-center">
+                        <div className="w-full h-full bg-[#1e2a3b] flex items-center justify-center">
                           <span className="text-xs text-gray-600">{idx + 1}</span>
                         </div>
                       )}
@@ -256,14 +256,14 @@ export default function InspectionDetail() {
                 <button 
                   onClick={() => setSelectedPhotoIndex(Math.max(0, selectedPhotoIndex - 1))}
                   disabled={selectedPhotoIndex === 0}
-                  className="flex-1 py-2.5 bg-[#1a2332] rounded-lg text-sm text-gray-400 font-medium disabled:opacity-30 hover:bg-[#243044] transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-[#1e2a3b] rounded-lg text-sm text-gray-400 font-medium disabled:opacity-30 hover:bg-[#2a3a4f] transition-all flex items-center justify-center gap-2"
                 >
                   <ChevronLeft className="w-4 h-4" /> Anterior
                 </button>
                 <button 
                   onClick={() => setSelectedPhotoIndex(Math.min(photos.length - 1, selectedPhotoIndex + 1))}
                   disabled={selectedPhotoIndex >= photos.length - 1}
-                  className="flex-1 py-2.5 bg-[#1a2332] rounded-lg text-sm text-white font-medium disabled:opacity-30 hover:bg-[#243044] transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-[#1e2a3b] rounded-lg text-sm text-white font-medium disabled:opacity-30 hover:bg-[#2a3a4f] transition-all flex items-center justify-center gap-2"
                 >
                   Siguiente <ChevronRight className="w-4 h-4" />
                 </button>
@@ -271,7 +271,7 @@ export default function InspectionDetail() {
             </div>
 
             {/* Client Comments */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3">
                 <MessageSquare className="w-4 h-4 text-gray-400" />
                 <h3 className="text-sm font-semibold text-white">Comentarios del Cliente</h3>
@@ -285,12 +285,12 @@ export default function InspectionDetail() {
           {/* Right Column */}
           <div className="col-span-3 space-y-5">
             {/* Damages Tabs */}
-            <div className="bg-[#141c27] rounded-xl overflow-hidden">
+            <div className="bg-[#151d2b] rounded-xl overflow-hidden">
               <div className="flex">
                 <button
                   onClick={() => setActiveTab('damages')}
                   className={`flex-1 py-3 text-sm font-medium transition-all ${
-                    activeTab === 'damages' ? 'bg-pink-500 text-white' : 'bg-[#1a2332] text-gray-400 hover:text-white'
+                    activeTab === 'damages' ? 'bg-pink-500 text-white' : 'bg-[#1e2a3b] text-gray-400 hover:text-white'
                   }`}
                 >
                   Daños
@@ -298,7 +298,7 @@ export default function InspectionDetail() {
                 <button
                   onClick={() => setActiveTab('consistency')}
                   className={`flex-1 py-3 text-sm font-medium transition-all ${
-                    activeTab === 'consistency' ? 'bg-pink-500 text-white' : 'bg-[#1a2332] text-gray-400 hover:text-white'
+                    activeTab === 'consistency' ? 'bg-pink-500 text-white' : 'bg-[#1e2a3b] text-gray-400 hover:text-white'
                   }`}
                 >
                   Consistencia
@@ -310,7 +310,7 @@ export default function InspectionDetail() {
                   damages.length > 0 ? (
                     <div className="space-y-3">
                       {damages.map((damage) => (
-                        <div key={damage.id} className="p-3 bg-[#0c1117] rounded-lg">
+                        <div key={damage.id} className="p-3 bg-[#0d1421] rounded-lg">
                           <div className="flex items-start justify-between mb-1">
                             <div>
                               <p className="text-sm font-medium text-white">{damage.part}</p>
@@ -326,7 +326,7 @@ export default function InspectionDetail() {
                               <button 
                                 onClick={() => toggleDamage(damage.id, true)}
                                 className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-                                  damage.approved === true ? 'bg-emerald-500 text-white' : 'bg-[#1a2332] text-emerald-400 hover:bg-emerald-500/20'
+                                  damage.approved === true ? 'bg-emerald-500 text-white' : 'bg-[#1e2a3b] text-emerald-400 hover:bg-emerald-500/20'
                                 }`}
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
@@ -334,7 +334,7 @@ export default function InspectionDetail() {
                               <button 
                                 onClick={() => toggleDamage(damage.id, false)}
                                 className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-                                  damage.approved === false ? 'bg-red-500 text-white' : 'bg-[#1a2332] text-red-400 hover:bg-red-500/20'
+                                  damage.approved === false ? 'bg-red-500 text-white' : 'bg-[#1e2a3b] text-red-400 hover:bg-red-500/20'
                                 }`}
                               >
                                 <XCircle className="w-3.5 h-3.5" />
@@ -359,10 +359,10 @@ export default function InspectionDetail() {
             </div>
 
             {/* Review Notes */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <h3 className="text-sm font-semibold text-white mb-3">Notas de Revisión</h3>
               <textarea 
-                className="w-full h-24 bg-[#0c1117] border border-[#2a3544] rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-none focus:outline-none focus:border-pink-500"
+                className="w-full h-24 bg-[#0d1421] border border-[#2a3a4f] rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 resize-none focus:outline-none focus:border-pink-500"
                 placeholder="Agrega notas sobre tu revisión..."
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
@@ -370,7 +370,7 @@ export default function InspectionDetail() {
             </div>
 
             {/* Decision Buttons */}
-            <div className="bg-[#141c27] rounded-xl p-5">
+            <div className="bg-[#151d2b] rounded-xl p-5">
               <h3 className="text-sm font-semibold text-white mb-3">Decisión</h3>
               <div className="space-y-2.5">
                 <button 
