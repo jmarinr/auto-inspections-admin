@@ -1,367 +1,457 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Search, Clock, Eye, CheckCircle, AlertTriangle, 
-  Filter, ChevronDown, Plus, BarChart3, Sun, Moon,
-  RefreshCw
+  Search, Clock, CheckCircle, AlertTriangle, RotateCcw,
+  Eye, ChevronDown, Filter, Plus, BarChart3, Car,
+  User, Calendar, TrendingUp, ArrowUpRight, MoreHorizontal,
+  RefreshCw, Bell, Settings, LogOut, ChevronRight, FileText
 } from 'lucide-react';
-import { getInspections, getStats, type Inspection } from '../lib/supabase';
-
+import { getInspections, type Inspection } from '../lib/supabase';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter] = useState('all');
-  const [isDark, setIsDark] = useState(true);
-  const [stats, setStats] = useState({
-    pending: 0,
-    review: 0,
-    approved: 0,
-    reinspection: 0,
-  });
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadInspections(); }, []);
 
-  const loadData = async () => {
+  const loadInspections = async () => {
     setLoading(true);
     try {
-      const [inspectionsData, statsData] = await Promise.all([
-        getInspections(),
-        getStats()
-      ]);
-      setInspections(inspectionsData || []);
-      setStats({
-        pending: statsData.pending,
-        review: statsData.review,
-        approved: statsData.approved,
-        reinspection: statsData.reinspection,
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      const data = await getInspections();
+      setInspections(data);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const filteredInspections = inspections.filter(ins => {
-    const matchesSearch = 
+    const matchesSearch = searchTerm === '' || 
       ins.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ins.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ins.vehicle_plate?.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = statusFilter === 'all' || ins.status === statusFilter;
-    
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusDot = (status: string) => {
-    const colors: Record<string, string> = {
-      'Pendiente': 'bg-red-500',
-      'En Revisión': 'bg-yellow-500',
-      'Aprobada': 'bg-green-500',
-      'Rechazada': 'bg-red-500',
-      'Reinspección': 'bg-purple-500',
-    };
-    return colors[status] || 'bg-gray-500';
+  const stats = {
+    pending: inspections.filter(i => i.status === 'Pendiente').length,
+    inReview: inspections.filter(i => i.status === 'En Revisión').length,
+    approved: inspections.filter(i => i.status === 'Aprobada').length,
+    reinspection: inspections.filter(i => i.status === 'Reinspección').length,
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      'Pendiente': 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-      'En Revisión': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      'Aprobada': 'bg-green-500/20 text-green-400 border-green-500/30',
-      'Rechazada': 'bg-red-500/20 text-red-400 border-red-500/30',
-      'Reinspección': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-    };
-    return styles[status] || 'bg-gray-500/20 text-gray-400';
+  const calculateSLA = (deadline: string | null) => {
+    if (!deadline) return { text: 'N/A', urgent: false, color: 'text-slate-400' };
+    const now = new Date();
+    const dl = new Date(deadline);
+    const diff = dl.getTime() - now.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (diff <= 0) return { text: 'Vencido', urgent: true, color: 'text-red-600' };
+    if (hours < 4) return { text: `${hours}h ${minutes}m`, urgent: true, color: 'text-red-600' };
+    if (hours < 12) return { text: `${hours}h ${minutes}m`, urgent: false, color: 'text-amber-600' };
+    return { text: `${hours}h ${minutes}m`, urgent: false, color: 'text-emerald-600' };
   };
 
-  const getPolicyStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      'En-Proceso': 'text-cyan-400',
-      'Emitida': 'text-green-400',
-      'Rechazada': 'text-red-400',
-      'Cancelada': 'text-orange-400',
-    };
-    return colors[status] || 'text-gray-400';
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'Pendiente': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' };
+      case 'En Revisión': return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' };
+      case 'Aprobada': return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' };
+      case 'Rechazada': return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' };
+      case 'Reinspección': return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' };
+      default: return { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200', dot: 'bg-slate-500' };
+    }
   };
 
   const getRiskColor = (score: number) => {
-    if (score >= 70) return { bar: 'bg-red-500', text: 'text-red-400' };
-    if (score >= 50) return { bar: 'bg-yellow-500', text: 'text-yellow-400' };
-    return { bar: 'bg-green-500', text: 'text-green-400' };
-  };
-
-  const theme = {
-    bg: isDark ? 'bg-[#0d1117]' : 'bg-gray-100',
-    card: isDark ? 'bg-[#161b22] border-[#30363d]' : 'bg-white border-gray-200',
-    text: isDark ? 'text-white' : 'text-gray-900',
-    textMuted: isDark ? 'text-gray-400' : 'text-gray-500',
-    input: isDark ? 'bg-[#0d1117] border-[#30363d] text-white' : 'bg-white border-gray-300 text-gray-900',
-    hover: isDark ? 'hover:bg-[#1c2128]' : 'hover:bg-gray-50',
+    if (score >= 80) return { bar: 'bg-red-500', text: 'text-red-600' };
+    if (score >= 60) return { bar: 'bg-amber-500', text: 'text-amber-600' };
+    return { bar: 'bg-emerald-500', text: 'text-emerald-600' };
   };
 
   return (
-    <div className={`min-h-screen ${theme.bg} transition-colors duration-300`}>
-      {/* Header */}
-      <header className={`${theme.card} border-b px-6 py-4 sticky top-0 z-50`}>
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-pink-500/25">
-              H
-            </div>
-            <span className={`font-bold text-lg ${theme.text}`}>HenkanCX</span>
-            <span className="px-3 py-1 text-xs font-medium bg-purple-500/20 text-purple-400 rounded-full border border-purple-500/30">
-              Dashboard de Triage
-            </span>
-          </div>
-          
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      {/* Sidebar */}
+      <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-slate-200 z-40 hidden lg:flex flex-col">
+        {/* Logo */}
+        <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsDark(!isDark)}
-              className={`p-2.5 rounded-xl ${theme.card} border transition-all`}
-            >
-              {isDark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-purple-500" />}
-            </button>
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-pink-600 text-white font-semibold rounded-xl shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 transition-all">
-              <Plus className="w-4 h-4" /> Crear Inspección
-            </button>
-            <button className={`flex items-center gap-2 px-5 py-2.5 ${theme.card} border rounded-xl font-medium ${theme.text} transition-all`}>
-              <BarChart3 className="w-4 h-4" /> Reportes
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-[1600px] mx-auto p-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard 
-            title="Casos Pendientes" 
-            value={stats.pending} 
-            subtitle="+3 en las últimas 2h"
-            icon={<Clock className="w-6 h-6" />}
-            iconBg="bg-yellow-500/20"
-            iconColor="text-yellow-400"
-            theme={theme}
-          />
-          <StatCard 
-            title="En Revisión" 
-            value={stats.review} 
-            subtitle="Tiempo prom: 2.3h"
-            icon={<Eye className="w-6 h-6" />}
-            iconBg="bg-blue-500/20"
-            iconColor="text-blue-400"
-            theme={theme}
-          />
-          <StatCard 
-            title="Aprobados Hoy" 
-            value={stats.approved} 
-            subtitle="92% auto-aprobación"
-            icon={<CheckCircle className="w-6 h-6" />}
-            iconBg="bg-green-500/20"
-            iconColor="text-green-400"
-            theme={theme}
-          />
-          <StatCard 
-            title="Reinspecciones" 
-            value={stats.reinspection} 
-            subtitle="8% del total"
-            icon={<AlertTriangle className="w-6 h-6" />}
-            iconBg="bg-red-500/20"
-            iconColor="text-red-400"
-            theme={theme}
-          />
-        </div>
-
-        {/* Search & Filters */}
-        <div className={`${theme.card} border rounded-2xl p-4 mb-6`}>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[300px] relative">
-              <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${theme.textMuted}`} />
-              <input
-                type="text"
-                placeholder="Buscar por número de caso, cliente o vehículo..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full pl-12 pr-4 py-3 ${theme.input} border rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all`}
-              />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <span className="text-white font-bold text-lg">H</span>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <FilterButton label="Todos los estados" icon={<Filter className="w-4 h-4" />} theme={theme} />
-              <FilterButton label="Todas las prioridades" theme={theme} />
-              <FilterButton label="Todos los tipos de póli..." theme={theme} />
-              <FilterButton label="Todos los estados de p..." theme={theme} />
+            <div>
+              <h1 className="font-bold text-slate-900 tracking-tight">HenkanCX</h1>
+              <p className="text-xs text-slate-500">Panel de Triage</p>
             </div>
           </div>
         </div>
 
-        {/* Inspections Table */}
-        <div className="space-y-3">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <RefreshCw className="w-8 h-8 text-pink-500 animate-spin" />
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1">
+          <NavItem icon={BarChart3} label="Dashboard" active />
+          <NavItem icon={Car} label="Inspecciones" badge={stats.pending} />
+          <NavItem icon={User} label="Clientes" />
+          <NavItem icon={Calendar} label="Calendario" />
+          <NavItem icon={TrendingUp} label="Reportes" />
+          <NavItem icon={Settings} label="Configuración" />
+        </nav>
+
+        {/* User */}
+        <div className="p-4 border-t border-slate-100">
+          <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center">
+              <User className="w-5 h-5 text-slate-600" />
             </div>
-          ) : filteredInspections.length === 0 ? (
-            <div className={`${theme.card} border rounded-2xl p-12 text-center`}>
-              <p className={theme.textMuted}>No se encontraron inspecciones</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">Admin</p>
+              <p className="text-xs text-slate-500 truncate">admin@henkancx.com</p>
             </div>
-          ) : (
-            filteredInspections.map((ins) => (
-              <InspectionRow 
-                key={ins.id} 
-                inspection={ins} 
-                theme={theme}
-                onView={() => navigate(`/inspection/${ins.id}`)}
-                getStatusDot={getStatusDot}
-                getStatusBadge={getStatusBadge}
-                getPolicyStatusColor={getPolicyStatusColor}
-                getRiskColor={getRiskColor}
-              />
-            ))
-          )}
+            <LogOut className="w-4 h-4 text-slate-400" />
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="lg:pl-64">
+        {/* Top Header */}
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200/50">
+          <div className="px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Gestión de inspecciones vehiculares</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={loadInspections}
+                  className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all hover:border-slate-300 group"
+                >
+                  <RefreshCw className={`w-5 h-5 text-slate-600 group-hover:text-slate-900 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all hover:border-slate-300 relative">
+                  <Bell className="w-5 h-5 text-slate-600" />
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-medium">3</span>
+                </button>
+                <button className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-all">
+                  <FileText className="w-4 h-4" />
+                  Reportes
+                </button>
+                <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-500/25 transition-all hover:shadow-orange-500/40 hover:-translate-y-0.5">
+                  <Plus className="w-5 h-5" />
+                  Nueva Inspección
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="p-6 lg:p-8 space-y-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard 
+              icon={Clock} 
+              label="Pendientes" 
+              value={stats.pending} 
+              subtitle="+3 hoy"
+              color="amber"
+            />
+            <StatCard 
+              icon={Eye} 
+              label="En Revisión" 
+              value={stats.inReview} 
+              subtitle="Tiempo prom: 2.3h"
+              color="blue"
+            />
+            <StatCard 
+              icon={CheckCircle} 
+              label="Aprobadas Hoy" 
+              value={stats.approved} 
+              subtitle="92% tasa"
+              color="emerald"
+            />
+            <StatCard 
+              icon={RotateCcw} 
+              label="Reinspecciones" 
+              value={stats.reinspection} 
+              subtitle="8% del total"
+              color="purple"
+            />
+          </div>
+
+          {/* Filters & Search */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm shadow-slate-200/50 p-4">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Buscar por ID, cliente o placa..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                />
+              </div>
+              
+              {/* Filters */}
+              <div className="flex flex-wrap gap-3">
+                <FilterDropdown 
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={[
+                    { value: 'all', label: 'Todos los estados' },
+                    { value: 'Pendiente', label: 'Pendiente' },
+                    { value: 'En Revisión', label: 'En Revisión' },
+                    { value: 'Aprobada', label: 'Aprobada' },
+                    { value: 'Rechazada', label: 'Rechazada' },
+                    { value: 'Reinspección', label: 'Reinspección' },
+                  ]}
+                />
+                <FilterDropdown 
+                  value={priorityFilter}
+                  onChange={setPriorityFilter}
+                  options={[
+                    { value: 'all', label: 'Todas las prioridades' },
+                    { value: 'high', label: 'Alta prioridad' },
+                    { value: 'medium', label: 'Media' },
+                    { value: 'low', label: 'Baja' },
+                  ]}
+                />
+                <button className="flex items-center gap-2 px-4 py-3 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all">
+                  <Filter className="w-4 h-4" />
+                  Más filtros
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Inspections Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm shadow-slate-200/50 overflow-hidden">
+            {/* Table Header */}
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-slate-900">
+                  Inspecciones Recientes
+                  <span className="ml-2 text-sm font-normal text-slate-500">({filteredInspections.length} resultados)</span>
+                </h3>
+                <button className="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1">
+                  Ver todas <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Inspección</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Vehículo</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Risk Score</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Quality</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">SLA</th>
+                    <th className="text-right px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-20 text-center">
+                        <RefreshCw className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-3" />
+                        <p className="text-slate-500">Cargando inspecciones...</p>
+                      </td>
+                    </tr>
+                  ) : filteredInspections.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-20 text-center">
+                        <Car className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-500">No hay inspecciones</p>
+                      </td>
+                    </tr>
+                  ) : filteredInspections.map((ins) => {
+                    const statusConfig = getStatusConfig(ins.status);
+                    const sla = calculateSLA(ins.sla_deadline);
+                    const riskColor = getRiskColor(ins.risk_score);
+                    
+                    return (
+                      <tr 
+                        key={ins.id} 
+                        className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                        onClick={() => navigate(`/inspection/${ins.id}`)}
+                      >
+                        {/* Inspection Info */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">
+                              {ins.vehicle_brand?.charAt(0) || 'V'}
+                            </div>
+                            <div>
+                              <p className="font-mono text-sm font-semibold text-slate-900">{ins.id}</p>
+                              <p className="text-sm text-slate-500">{ins.client_name || 'Sin nombre'}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Vehicle */}
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-medium text-slate-900">{ins.vehicle_brand} {ins.vehicle_model}</p>
+                          <p className="text-sm text-slate-500">{ins.vehicle_year} • {ins.vehicle_plate}</p>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></span>
+                            {ins.status}
+                          </span>
+                        </td>
+
+                        {/* Risk Score */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full ${riskColor.bar} rounded-full transition-all`} 
+                                style={{ width: `${ins.risk_score}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm font-semibold ${riskColor.text}`}>{ins.risk_score}</span>
+                          </div>
+                        </td>
+
+                        {/* Quality */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-emerald-500 rounded-full transition-all" 
+                                style={{ width: `${ins.quality_score}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-semibold text-emerald-600">{ins.quality_score}</span>
+                          </div>
+                        </td>
+
+                        {/* SLA */}
+                        <td className="px-6 py-4">
+                          <div className={`flex items-center gap-2 ${sla.color}`}>
+                            {sla.urgent && <AlertTriangle className="w-4 h-4" />}
+                            <span className="text-sm font-semibold">{sla.text}</span>
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); navigate(`/inspection/${ins.id}`); }}
+                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm font-semibold rounded-lg shadow-md shadow-orange-500/20 transition-all"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Revisar
+                            </button>
+                            <button 
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                            >
+                              <MoreHorizontal className="w-4 h-4 text-slate-500" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <p className="text-sm text-slate-500">
+                Mostrando {Math.min(filteredInspections.length, 10)} de {filteredInspections.length} inspecciones
+              </p>
+              <div className="flex items-center gap-2">
+                <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white transition-colors">
+                  Anterior
+                </button>
+                <button className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">1</button>
+                <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white transition-colors">2</button>
+                <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white transition-colors">3</button>
+                <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white transition-colors">
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </div>
   );
 }
 
-// Stat Card Component
-function StatCard({ title, value, subtitle, icon, iconBg, iconColor, theme }: any) {
+// Components
+function NavItem({ icon: Icon, label, active, badge }: { icon: any; label: string; active?: boolean; badge?: number }) {
   return (
-    <div className={`${theme.card} border rounded-2xl p-5 relative overflow-hidden`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className={`text-sm ${theme.textMuted} mb-1`}>{title}</p>
-          <p className={`text-3xl font-bold ${theme.text}`}>{value}</p>
-          <p className={`text-xs ${theme.textMuted} mt-2`}>{subtitle}</p>
-        </div>
-        <div className={`p-3 rounded-xl ${iconBg}`}>
-          <div className={iconColor}>{icon}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Filter Button Component
-function FilterButton({ label, icon, theme }: any) {
-  return (
-    <button className={`flex items-center gap-2 px-4 py-2.5 ${theme.card} border rounded-xl text-sm ${theme.textMuted} hover:border-pink-500/50 transition-all`}>
-      {icon}
-      <span className="truncate max-w-[140px]">{label}</span>
-      <ChevronDown className="w-4 h-4 flex-shrink-0" />
+    <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+      active 
+        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20' 
+        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+    }`}>
+      <Icon className="w-5 h-5" />
+      <span className="font-medium">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className={`ml-auto px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+          active ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'
+        }`}>
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
 
-// Inspection Row Component
-function InspectionRow({ inspection, theme, onView, getStatusDot, getStatusBadge, getPolicyStatusColor, getRiskColor }: any) {
-  const riskStyle = getRiskColor(inspection.risk_score);
-  
-  const calculateSLA = () => {
-    if (!inspection.sla_deadline) return { time: 'N/A', date: '' };
-    const deadline = new Date(inspection.sla_deadline);
-    const now = new Date();
-    const diff = deadline.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return {
-      time: diff > 0 ? `${hours}h ${minutes}m` : 'Vencido',
-      date: deadline.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-    };
+function StatCard({ icon: Icon, label, value, subtitle, color }: { icon: any; label: string; value: number; subtitle: string; color: string }) {
+  const colors: Record<string, { bg: string; icon: string; iconBg: string }> = {
+    amber: { bg: 'from-amber-50 to-orange-50', icon: 'text-amber-600', iconBg: 'bg-amber-100' },
+    blue: { bg: 'from-blue-50 to-indigo-50', icon: 'text-blue-600', iconBg: 'bg-blue-100' },
+    emerald: { bg: 'from-emerald-50 to-teal-50', icon: 'text-emerald-600', iconBg: 'bg-emerald-100' },
+    purple: { bg: 'from-purple-50 to-violet-50', icon: 'text-purple-600', iconBg: 'bg-purple-100' },
   };
-  
-  const sla = calculateSLA();
+  const c = colors[color] || colors.amber;
 
   return (
-    <div className={`${theme.card} border rounded-2xl p-5 ${theme.hover} transition-all cursor-pointer group`} onClick={onView}>
-      <div className="flex items-center gap-6">
-        {/* ID & Client Info */}
-        <div className="min-w-[200px]">
-          <div className="flex items-center gap-3 mb-1">
-            <p className={`font-mono font-semibold ${theme.text}`}>{inspection.id}</p>
-            <div className={`w-3 h-3 rounded-full ${getStatusDot(inspection.status)}`}></div>
-          </div>
-          <p className={`text-sm ${theme.text}`}>{inspection.client_name || 'Sin nombre'}</p>
-          <p className={`text-sm ${theme.textMuted}`}>
-            {inspection.vehicle_brand} {inspection.vehicle_model} {inspection.vehicle_year}
-          </p>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className={`px-2 py-0.5 text-xs rounded-md border ${getStatusBadge(inspection.status)}`}>
-              {inspection.status}
-            </span>
-            {inspection.tags?.slice(0, 2).map((tag: string, i: number) => (
-              <span key={i} className="px-2 py-0.5 text-xs bg-gray-500/20 text-gray-400 rounded-md border border-gray-500/30">
-                {tag}
-              </span>
-            ))}
-          </div>
+    <div className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 border border-white shadow-sm`}>
+      <div className="flex items-start justify-between mb-4">
+        <div className={`p-3 rounded-xl ${c.iconBg}`}>
+          <Icon className={`w-6 h-6 ${c.icon}`} />
         </div>
-
-        {/* Policy Type */}
-        <div className="min-w-[100px]">
-          <p className={`text-xs ${theme.textMuted} mb-1`}>Policy Type</p>
-          <p className={`font-medium ${theme.text}`}>{inspection.policy_type || 'Standard'}</p>
-        </div>
-
-        {/* Policy Status */}
-        <div className="min-w-[100px]">
-          <p className={`text-xs ${theme.textMuted} mb-1`}>Policy Status</p>
-          <p className={`font-medium ${getPolicyStatusColor(inspection.policy_status)}`}>
-            {inspection.policy_status || 'En-Proceso'}
-          </p>
-        </div>
-
-        {/* Risk Score */}
-        <div className="min-w-[120px]">
-          <p className={`text-xs ${theme.textMuted} mb-1`}>Risk Score</p>
-          <div className="flex items-center gap-2">
-            <span className={`text-xl font-bold ${riskStyle.text}`}>{inspection.risk_score}</span>
-            <span className={theme.textMuted}>/100</span>
-          </div>
-          <div className="h-1.5 bg-gray-700 rounded-full mt-1.5 overflow-hidden">
-            <div className={`h-full ${riskStyle.bar} rounded-full`} style={{ width: `${inspection.risk_score}%` }}></div>
-          </div>
-        </div>
-
-        {/* Quality Score */}
-        <div className="min-w-[120px]">
-          <p className={`text-xs ${theme.textMuted} mb-1`}>Quality Score</p>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-green-400">{inspection.quality_score}</span>
-            <span className={theme.textMuted}>/100</span>
-          </div>
-          <div className="h-1.5 bg-gray-700 rounded-full mt-1.5 overflow-hidden">
-            <div className="h-full bg-green-500 rounded-full" style={{ width: `${inspection.quality_score}%` }}></div>
-          </div>
-        </div>
-
-        {/* SLA */}
-        <div className="min-w-[120px]">
-          <p className={`text-xs ${theme.textMuted} mb-1`}>SLA Restante</p>
-          <p className={`text-xl font-bold ${theme.text}`}>{sla.time}</p>
-          <p className={`text-xs ${theme.textMuted}`}>{sla.date}</p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 ml-auto">
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-pink-600 text-white font-medium rounded-xl shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 transition-all">
-            <Eye className="w-4 h-4" /> Revisar
-          </button>
-          <button className={`p-2.5 ${theme.card} border rounded-xl ${theme.hover} transition-all`}>
-            <CheckCircle className="w-5 h-5 text-green-400" />
-          </button>
-          <button className={`p-2.5 ${theme.card} border rounded-xl ${theme.hover} transition-all`}>
-            <AlertTriangle className="w-5 h-5 text-yellow-400" />
-          </button>
-        </div>
+        <ArrowUpRight className={`w-5 h-5 ${c.icon}`} />
       </div>
+      <p className="text-3xl font-bold text-slate-900">{value}</p>
+      <p className="text-sm font-medium text-slate-600 mt-1">{label}</p>
+      <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+    </div>
+  );
+}
+
+function FilterDropdown({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all cursor-pointer hover:border-slate-300"
+      >
+        {options.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
     </div>
   );
 }
